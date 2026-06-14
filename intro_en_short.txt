@@ -1,0 +1,1 @@
+AMDLocalDub turns foreign videos into Chinese dubbing locally. No cloud upload. Uses AMD GPU for speech recognition (whisper.cpp Vulkan) and video encoding (AMF). Works with LM Studio local models for fully offline translation. Drag video, choose engine, click start. Outputs MP4/MKV with subtitles. A pure local dubbing tool for AMD GPU users.

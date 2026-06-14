@@ -1,0 +1,95 @@
+# VideoDub 全局配置文件
+# 所有配置项均可通过 Gradio UI 运行时修改
+
+# ==================== 全局设置 ====================
+general:
+  working_dir: "outputs"          # 临时工作目录（相对于项目根）
+  log_dir: "logs"                 # 日志文件目录
+  models_dir: "models"            # whisper.cpp 模型文件目录
+  temp_cleanup: true              # 任务完成后是否清理临时文件
+  max_retries: 3                  # API 调用最大重试次数
+  retry_delay: 3.0                # 重试等待秒数
+
+# ==================== ASR 设置 (whisper.cpp GPU 加速，不支持 CPU) ====================
+asr:
+  model_path: "models/ggml-small.bin"        # whisper.cpp 模型路径
+  model_type: "small"                        # tiny / base / small / medium / large-v1 / large-v3
+  backend: "vulkan"                          # 推理后端: vulkan / rocm（仅 GPU，无 CPU 回退）
+  gpu_device: 0                              # GPU 设备编号
+  whisper_executable: "whisper-cli"          # whisper.cpp 可执行文件
+  whisper_bin_dir: "whisper_jerry_bin"       # Vulkan 二进制目录
+  language: "en"
+
+# ==================== 翻译引擎设置 ====================
+translation:
+  # 当前激活的引擎（切换时修改此项）
+  active_engine: "siliconflow"             # siliconflow / lmstudio / deepseek
+
+  # ---------- SiliconFlow (推荐：默认使用 DeepSeek-V4-Flash) ----------
+  siliconflow:
+    api_url: "https://api.siliconflow.cn/v1/chat/completions"
+    api_key: "your_siliconflow_api_key_here"   # 替换为实际 API Key
+    model_name: "deepseek-ai/DeepSeek-V4-Flash"
+    temperature: 0.3
+    max_tokens: 2048
+    top_p: 0.9
+    timeout: 30
+
+  # ---------- LM Studio (本地) ----------
+  lmstudio:
+    api_url: "http://localhost:1234/v1/chat/completions"
+    api_key: ""                                # LM Studio 本地无需 API Key
+    model_name: ""                             # LM Studio 自动选择已加载模型
+    temperature: 0.3
+    max_tokens: 2048
+    top_p: 0.9
+    timeout: 60
+
+  # ---------- DeepSeek ----------
+  deepseek:
+    api_url: "https://api.deepseek.com/v1/chat/completions"
+    api_key: "your_deepseek_api_key_here"     # 替换为实际 API Key
+    model_name: "deepseek-ai/DeepSeek-V4-Flash"
+    temperature: 0.3
+    max_tokens: 2048
+    top_p: 0.9
+    timeout: 30
+
+# ==================== TTS 设置 (Edge-TTS) ====================
+tts:
+  # 默认中文语音
+  voice_zh: "zh-CN-XiaoxiaoNeural"
+  # 默认英文语音
+  voice_en: "en-US-JennyNeural"
+  # 语速 (edge-tts 格式: +0% 为标准, +50% 为1.5倍速)
+  rate: "+0%"
+  # 音量
+  volume: "+0%"
+  # 连接超时（秒）
+  connect_timeout: 10
+
+# ==================== 输出格式设置 ====================
+output:
+  # 默认输出格式: mp4 / mkv
+  format: "mp4"
+  # 字幕模式: none / soft / burn
+  subtitle_mode: "soft"
+  # 视频编码器
+  video_codec: "libx264"
+  # 音频编码器
+  audio_codec: "aac"
+  # 输出视频质量 (0-51, 越低越好)
+  crf: 23
+
+# ==================== 句子拆分设置 ====================
+splitter:
+  max_segment_duration: 10.0     # 单句最长秒数，超过则拆分
+  min_segment_duration: 0.5      # 单句最短秒数，短于此则尝试合并
+  merge_threshold: 0.3           # 两句间隔小于此值（秒）则合并
+
+# ==================== 语言设置 ====================
+language:
+  source_lang: "en"
+  target_lang: "zh-CN"
+  # 翻译 prompt 模板（{source_lang} 和 {target_lang} 会被自动替换）
+  system_prompt_template: "You are a professional translator. Translate the following text from {source_lang} to {target_lang}. Only output the translation, no explanations, no notes, no quotation marks."

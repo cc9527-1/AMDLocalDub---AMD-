@@ -1,0 +1,33 @@
+# AMD离线配音 / AMDLocalDub - .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+outputs/
+logs/
+models/*.bin
+models/*.gguf
+whisper_*/
+*.zip
+.cache_*
+_subtitle.srt
+
+# OS
+Thumbs.db
+.DS_Store

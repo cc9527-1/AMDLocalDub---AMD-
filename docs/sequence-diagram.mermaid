@@ -1,0 +1,96 @@
+sequenceDiagram
+    participant User as 用户
+    participant UI as Gradio UI
+    participant PM as PipelineManager
+    participant Prog as ProgressManager
+    participant Log as Logger
+    participant VL as VideoLoader
+    participant ASR as ASREngine
+    participant SS as SentenceSplitter
+    participant TE as TranslationEngine
+    participant AS as AudioSegmenter
+    participant TTS as TTSEngine
+    participant AM as AudioMerger
+    participant VC as VideoComposer
+
+    User->>UI: 1. 上传视频 + 配置参数
+    UI->>UI: 2. 显示文件信息
+    User->>UI: 3. 点击"一键启动"
+
+    UI->>PM: 4. execute(context)
+    PM->>Prog: 5. reset()
+    PM->>Log: 6. info("Pipeline 启动")
+
+    %% Stage 1: VideoLoader
+    PM->>PM: 7. run_stage(VIDEO_LOAD, ctx)
+    PM->>VL: 8. load(ctx.video_path)
+    VL-->>PM: 9. media_info
+    PM->>VL: 10. extract_audio(ctx.video_path, tmp.wav)
+    VL-->>PM: 11. ctx.audio_path = tmp.wav
+    PM->>Prog: 12. update(VIDEO_LOAD, 100%, "视频加载完成")
+    PM->>Log: 13. info("视频加载完成")
+
+    %% Stage 2: ASR
+    PM->>PM: 14. run_stage(ASR, ctx)
+    PM->>ASR: 15. initialize(model_path, vulkan)
+    ASR-->>PM: 16. ready
+    PM->>ASR: 17. transcribe(ctx.audio_path, callback)
+    loop 每处理 10%
+        ASR->>Prog: 18. update(ASR, percent, "识别中...")
+    end
+    ASR-->>PM: 19. raw_segments
+    PM->>Log: 20. info(f"ASR 完成，检测到 {n} 个片段")
+
+    %% Stage 3: SentenceSplitter
+    PM->>PM: 21. run_stage(SPLIT, ctx)
+    PM->>SS: 22. split(raw_segments)
+    SS-->>PM: 23. refined_segments
+    PM->>Log: 24. info(f"句子拆分完成，共 {n} 句")
+
+    %% Stage 4: Translate
+    PM->>PM: 25. run_stage(TRANSLATE, ctx)
+    PM->>TE: 26. batch_translate(ctx.segments, callback)
+    loop 每翻译一句
+        TE->>Prog: 27. update(TRANSLATE, percent, f"翻译第 {i}/{n} 句")
+        TE->>TE: 28. _call_api(prompt)
+    end
+    TE-->>PM: 29. translated_segments
+
+    %% 用户校对（P1 功能）
+    opt 翻译校对模式（P1）
+        PM->>UI: 30. 触发翻译校对界面
+        UI->>User: 31. 展示翻译结果供编辑
+        User->>UI: 32. 编辑并确认
+        UI->>PM: 33. 更新后的 segments
+    end
+
+    %% Stage 5: AudioSegmenter
+    PM->>PM: 34. run_stage(AUDIO_SEGMENT, ctx)
+    PM->>AS: 35. segment_audio(ctx.audio_path, ctx.segments, tmp_dir)
+    AS-->>PM: 36. segments_with_ref_audio
+
+    %% Stage 6: TTS
+    PM->>PM: 37. run_stage(TTS, ctx)
+    PM->>TTS: 38. batch_synthesize(ctx.segments, tmp_dir, callback)
+    loop 每生成一句
+        TTS->>Prog: 39. update(TTS, percent, f"配音第 {i}/{n} 句")
+        TTS->>TTS: 40. edge-tts 生成音频
+    end
+    TTS-->>PM: 41. segments_with_tts
+
+    %% Stage 7: AudioMerger
+    PM->>PM: 42. run_stage(AUDIO_MERGE, ctx)
+    PM->>AM: 43. merge(ctx.segments, ctx.metadata.duration)
+    AM-->>PM: 44. ctx.merged_audio_path
+    PM->>Prog: 45. update(AUDIO_MERGE, 100%, "音频合并完成")
+
+    %% Stage 8: VideoComposer
+    PM->>PM: 46. run_stage(VIDEO_COMPOSE, ctx)
+    PM->>VC: 47. compose(ctx.video_path, ctx.merged_audio_path, output_path, subtitle_path, mode)
+    VC-->>PM: 48. ctx.output_video_path
+
+    %% 完成
+    PM->>Prog: 49. mark_stage_complete(VIDEO_COMPOSE)
+    PM->>Log: 50. info("Pipeline 全部完成")
+    PM-->>UI: 51. context (含输出路径)
+    UI->>User: 52. 显示输出预览 + 下载按钮

@@ -1,0 +1,261 @@
+classDiagram
+    %% ========== 枚举 ==========
+    class PipelineStage {
+        <<enumeration>>
+        VIDEO_LOAD
+        ASR
+        SENTENCE_SPLIT
+        TRANSLATE
+        AUDIO_SEGMENT
+        TTS
+        AUDIO_MERGE
+        VIDEO_COMPOSE
+    }
+
+    class PipelineStatus {
+        <<enumeration>>
+        PENDING
+        RUNNING
+        COMPLETED
+        FAILED
+        CANCELLED
+    }
+
+    class SegmentStatus {
+        <<enumeration>>
+        PENDING
+        TRANSLATED
+        TTS_DONE
+        COMPLETED
+    }
+
+    class EngineType {
+        <<enumeration>>
+        SILICONFLOW
+        LM_STUDIO
+        DEEPSEEK
+    }
+
+    %% ========== 数据模型 ==========
+    class Segment {
+        +int index
+        +str original_text
+        +str translated_text
+        +float start_time
+        +float end_time
+        +str tts_audio_path
+        +SegmentStatus status
+        +str error_message
+        +__init__(index, original_text, start_time, end_time)
+        +to_dict() dict
+        +from_dict(data: dict) Segment
+    }
+
+    class PipelineContext {
+        +str video_path
+        +str audio_path
+        +float duration
+        +str source_lang
+        +str target_lang
+        +str output_format
+        +str subtitle_mode
+        +EngineType engine_type
+        +PipelineStatus status
+        +List~Segment~ segments
+        +str merged_audio_path
+        +str output_video_path
+        +str subtitle_path
+        +dict metadata
+        +dict config_snapshot
+        +str working_dir
+        +__init__(video_path, config)
+        +add_segment(segment)
+        +get_segment(index) Segment
+        +to_dict() dict
+    }
+
+    %% ========== 基础服务 ==========
+    class ConfigManager {
+        -dict _config
+        -str _path
+        +__init__(config_path: str)
+        +load() dict
+        +save() void
+        +get(key: str, default: Any) Any
+        +get_engine_config(engine_type: EngineType) dict
+        +validate() List~str~
+    }
+
+    class ProgressManager {
+        -dict _progress
+        -callable _callback
+        -datetime _stage_start
+        +__init__(callback: callable)
+        +update(stage: PipelineStage, percent: float, message: str)
+        +get_summary() dict
+        +get_stage_progress(stage: PipelineStage) dict
+        +estimate_remaining() float
+        +reset()
+        +mark_stage_complete(stage: PipelineStage)
+        +mark_stage_failed(stage: PipelineStage, error: str)
+    }
+
+    class Logger {
+        -str _log_dir
+        -str _log_file
+        +__init__(log_dir: str)
+        +info(message: str, module: str)
+        +warning(message: str, module: str)
+        +error(message: str, module: str, exc_info: bool)
+        +get_recent(level: str, lines: int) List~dict~
+        +get_file_path() str
+    }
+
+    %% ========== Pipeline 调度器 ==========
+    class PipelineManager {
+        -ConfigManager _config
+        -ProgressManager _progress
+        -Logger _logger
+        -Thread _worker
+        -bool _cancelled
+        +__init__(config: ConfigManager, progress: ProgressManager, logger: Logger)
+        +execute(context: PipelineContext) PipelineContext
+        -run_stage(stage: PipelineStage, context: PipelineContext)
+        -stage_video_load(ctx) void
+        -stage_asr(ctx) void
+        -stage_split(ctx) void
+        -stage_translate(ctx) void
+        -stage_audio_segment(ctx) void
+        -stage_tts(ctx) void
+        -stage_audio_merge(ctx) void
+        -stage_video_compose(ctx) void
+        +cancel() void
+        +get_status() dict
+    }
+
+    %% ========== 视频模块 ==========
+    class VideoLoader {
+        +SUPPORTED_FORMATS: List~str~
+        +load(video_path: str) dict
+        +extract_audio(video_path: str, output_path: str) str
+        +get_media_info(video_path: str) dict
+        +validate_format(video_path: str) bool
+    }
+
+    class AudioMerger {
+        +merge(segments: List~Segment~, output_path: str) str
+        +normalize_audio(audio_path: str) str
+    }
+
+    class VideoComposer {
+        +compose(video_path: str, audio_path: str, output_path: str, subtitle_path: str, subtitle_mode: str) str
+        +add_subtitle_track(video_path: str, subtitle_path: str, output_path: str) str
+        +burn_subtitles(video_path: str, subtitle_path: str, output_path: str) str
+    }
+
+    %% ========== ASR 模块 ==========
+    class ASREngine {
+        -str _model_path
+        -str _backend
+        -int _gpu_device
+        -subprocess _process
+        +__init__(model_path: str, backend: str, gpu_device: int)
+        +initialize() bool
+        +transcribe(audio_path: str, progress_callback: callable) List~Segment~
+        +shutdown() void
+        -build_whisper_command(audio_path: str, output_path: str) List~str~
+        -parse_output(output_path: str) List~dict~
+    }
+
+    %% ========== 句子拆分 ==========
+    class SentenceSplitter {
+        +int max_segment_duration
+        +split(segments: List~Segment~) List~Segment~
+        +merge_short_segments(segments: List~Segment~, min_duration: float) List~Segment~
+        +split_long_segment(segment: Segment, max_duration: float) List~Segment~
+    }
+
+    %% ========== 翻译引擎 ==========
+    class BaseTranslator {
+        <<abstract>>
+        #str _api_url
+        #str _model_name
+        #str _api_key
+        #dict _params
+        +__init__(config: dict)
+        +translate(segment: Segment, source_lang: str, target_lang: str) Segment*
+        +batch_translate(segments: List~Segment~, source_lang: str, target_lang: str, progress_callback: callable) List~Segment~*
+        #_call_api(messages: List~dict~) str*
+        +validate_config() bool*
+    }
+
+    class SiliconFlowEngine {
+        +__init__(config: dict)
+        +translate(segment, source_lang, target_lang) Segment
+        +batch_translate(segments, source_lang, target_lang, progress_callback) List~Segment~
+        #_call_api(messages) str
+        +validate_config() bool
+    }
+
+    class LMStudioEngine {
+        +__init__(config: dict)
+        +translate(segment, source_lang, target_lang) Segment
+        +batch_translate(segments, source_lang, target_lang, progress_callback) List~Segment~
+        #_call_api(messages) str
+        +validate_config() bool
+    }
+
+    class DeepSeekEngine {
+        +__init__(config: dict)
+        +translate(segment, source_lang, target_lang) Segment
+        +batch_translate(segments, source_lang, target_lang, progress_callback) List~Segment~
+        #_call_api(messages) str
+        +validate_config() bool
+    }
+
+    class TranslationEngineFactory {
+        +create_engine(engine_type: EngineType, config: dict) BaseTranslator
+        +list_available_engines() List~EngineType~
+    }
+
+    %% ========== TTS 模块 ==========
+    class TTSEngine {
+        -str _voice
+        -str _rate
+        -int _connect_timeout
+        +__init__(voice: str, rate: str)
+        +synthesize(segment: Segment, output_dir: str) str
+        +batch_synthesize(segments: List~Segment~, output_dir: str, progress_callback: callable) List~Segment~
+        +validate_voice(voice: str) bool
+        +list_voices() List~str~
+    }
+
+    %% ========== 音频分段 ==========
+    class AudioSegmenter {
+        +segment_audio(audio_path: str, segments: List~Segment~, output_dir: str) List~Segment~
+        +extract_chunk(audio_path: str, start: float, end: float, output_path: str) str
+    }
+
+    %% ========== 关系 ==========
+    PipelineContext "1" --> "*" Segment : contains
+    PipelineManager --> PipelineContext : orchestrates
+    PipelineManager --> ProgressManager : reports to
+    PipelineManager --> Logger : logs to
+    PipelineManager --> VideoLoader : uses
+    PipelineManager --> ASREngine : uses
+    PipelineManager --> SentenceSplitter : uses
+    PipelineManager --> TranslationEngineFactory : uses
+    PipelineManager --> AudioSegmenter : uses
+    PipelineManager --> TTSEngine : uses
+    PipelineManager --> AudioMerger : uses
+    PipelineManager --> VideoComposer : uses
+
+    TranslationEngineFactory --> BaseTranslator : creates
+    BaseTranslator <|-- SiliconFlowEngine
+    BaseTranslator <|-- LMStudioEngine
+    BaseTranslator <|-- DeepSeekEngine
+
+    PipelineStage --> PipelineManager : stage enum
+    PipelineStatus --> PipelineContext : status enum
+    SegmentStatus --> Segment : status enum
+    EngineType --> TranslationEngineFactory : type enum
